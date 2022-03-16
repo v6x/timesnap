@@ -30,28 +30,34 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-const puppeteer = require('puppeteer');
-const path = require('path');
+const puppeteer = require("puppeteer");
+const pie = require("puppeteer-in-electron");
+const path = require("path");
 const defaultDuration = 5;
 const defaultFPS = 60;
-const { overwriteRandom } = require('./lib/overwrite-random');
-const { stringArrayFind, getPageViewportSize, setPageViewportSize } = require('./lib/utils');
+const { overwriteRandom } = require("./lib/overwrite-random");
+const {
+  stringArrayFind,
+  getPageViewportSize,
+  setPageViewportSize,
+} = require("./lib/utils");
 
 module.exports = async function (config) {
   config = Object.assign({}, config || {});
-  var url = config.url || 'index.html';
+  var url = config.url || "index.html";
   var delayMs = 1000 * (config.start || 0);
   var startWaitMs = 1000 * (config.startDelay || 0);
   var frameNumToTime = config.frameNumToTime;
   var unrandom = config.unrandomize;
-  var fps = config.fps, frameDuration;
+  var fps = config.fps,
+    frameDuration;
   var framesToCapture;
   var requestStopCapture = false;
-  var outputPath = path.resolve(process.cwd(), (config.outputDirectory || './'));
+  var outputPath = path.resolve(process.cwd(), config.outputDirectory || "./");
 
-  if (!url.includes('://')) {
+  if (!url.includes("://")) {
     // assume it is a file path
-    url = 'file://' + path.resolve(process.cwd(), url);
+    url = "file://" + path.resolve(process.cwd(), url);
   }
 
   if (config.frames) {
@@ -59,8 +65,7 @@ module.exports = async function (config) {
     if (!fps) {
       if (config.duration) {
         fps = framesToCapture / config.duration;
-      }
-      else {
+      } else {
         fps = defaultFPS;
       }
     }
@@ -99,9 +104,9 @@ module.exports = async function (config) {
 
   const launchOptions = {
     dumpio: !config.quiet && !config.logToStdErr,
-    headless: (config.headless !== undefined ? config.headless : true),
+    headless: config.headless !== undefined ? config.headless : true,
     executablePath: config.executablePath,
-    args: config.launchArguments || []
+    args: config.launchArguments || [],
   };
 
   const getBrowser = async function (config, launchOptions) {
@@ -110,9 +115,13 @@ module.exports = async function (config) {
     } else if (config.launcher) {
       return Promise.resolve(config.launcher(launchOptions));
     } else if (config.remoteUrl) {
-      let queryString = Object.keys(launchOptions).map(key => key + '=' + launchOptions[key]).join('&');
-      let remote = config.remoteUrl + '?' + queryString;
+      let queryString = Object.keys(launchOptions)
+        .map((key) => key + "=" + launchOptions[key])
+        .join("&");
+      let remote = config.remoteUrl + "?" + queryString;
       return puppeteer.connect({ browserWSEndpoint: remote });
+    } else if (config.electronApp) {
+      return await pie.connect(config.electronApp, puppeteer);
     } else {
       return puppeteer.launch(launchOptions);
     }
@@ -120,44 +129,56 @@ module.exports = async function (config) {
   // A marker is an action at a specific time
   var markers = [];
   var markerId = 0;
-  function addMarker({time, type, data}) {
+  function addMarker({ time, type, data }) {
     markers.push({ time, type, data, id: markerId++ });
   }
   async function run() {
     var browser = await getBrowser(config, launchOptions);
     var page = await browser.newPage();
-    config = Object.assign({
-      log,
-      outputPath,
-      page,
-      addMarker,
-      framesToCapture
-    }, config);
+    config = Object.assign(
+      {
+        log,
+        outputPath,
+        page,
+        addMarker,
+        framesToCapture,
+      },
+      config
+    );
     var capturer, timeHandler;
     if (config.canvasCaptureMode) {
-      if (typeof config.canvasCaptureMode === 'string' && config.canvasCaptureMode.startsWith('immediate')) {
+      if (
+        typeof config.canvasCaptureMode === "string" &&
+        config.canvasCaptureMode.startsWith("immediate")
+      ) {
         // remove starts of 'immediate' or 'immediate:'
-        config.canvasCaptureMode = config.canvasCaptureMode.replace(/^immediate:?/, '');
-        ({ timeHandler, capturer } = require('./lib/immediate-canvas-handler')(config));
-        log('Capture Mode: Immediate Canvas');
+        config.canvasCaptureMode = config.canvasCaptureMode.replace(
+          /^immediate:?/,
+          ""
+        );
+        ({ timeHandler, capturer } = require("./lib/immediate-canvas-handler")(
+          config
+        ));
+        log("Capture Mode: Immediate Canvas");
       } else {
-        timeHandler = require('./lib/overwrite-time');
-        capturer = require('./lib/capture-canvas')(config);
-        log('Capture Mode: Canvas');
+        timeHandler = require("./lib/overwrite-time");
+        capturer = require("./lib/capture-canvas")(config);
+        log("Capture Mode: Canvas");
       }
     } else {
-      timeHandler = require('./lib/overwrite-time');
-      capturer = require('./lib/capture-screenshot')(config);
-      log('Capture Mode: Screenshot');
+      timeHandler = require("./lib/overwrite-time");
+      capturer = require("./lib/capture-screenshot")(config);
+      log("Capture Mode: Screenshot");
     }
-    var scaleArg = stringArrayFind(launchOptions.args, '--force-device-scale-factor') ||
-      stringArrayFind(launchOptions.args, '--device-scale-factor');
+    var scaleArg =
+      stringArrayFind(launchOptions.args, "--force-device-scale-factor") ||
+      stringArrayFind(launchOptions.args, "--device-scale-factor");
     if (config.viewport || scaleArg) {
       config.viewport = Object.assign(
         {
           width: getPageViewportSize(page).width,
           height: getPageViewportSize(page).height,
-          deviceScaleFactor: scaleArg ? Number(scaleArg.split('=')[1]) || 1 : 1
+          deviceScaleFactor: scaleArg ? Number(scaleArg.split("=")[1]) || 1 : 1,
         },
         config.viewport
       );
@@ -166,22 +187,25 @@ module.exports = async function (config) {
     await overwriteRandom(page, unrandom, log);
     await timeHandler.overwriteTime(page);
     if (config.stopFunctionName) {
-      await page.exposeFunction(config.stopFunctionName, () => requestStopCapture = true);
+      await page.exposeFunction(
+        config.stopFunctionName,
+        () => (requestStopCapture = true)
+      );
     }
-    if (typeof config.navigatePageToURL === 'function') {
+    if (typeof config.navigatePageToURL === "function") {
       await config.navigatePageToURL({ page, url, log });
     } else {
-      log('Going to ' + url + '...');
-      await page.goto(url, { waitUntil: 'networkidle0' });
+      log("Going to " + url + "...");
+      await page.goto(url, { waitUntil: "networkidle0" });
     }
-    log('Page loaded');
+    log("Page loaded");
     if (timeHandler.preparePage) {
       await timeHandler.preparePage({ page, url, log });
     }
-    if ('preparePage' in config) {
-      log('Preparing page before screenshots...');
+    if ("preparePage" in config) {
+      log("Preparing page before screenshots...");
       await Promise.resolve(config.preparePage(page));
-      log('Page prepared');
+      log("Page prepared");
     }
     if (startWaitMs) {
       await new Promise((resolve) => {
@@ -193,19 +217,19 @@ module.exports = async function (config) {
       // run beforeCapture right before any capture frames
       addMarker({
         time: delayMs + frameNumToTime(1, framesToCapture),
-        type: 'Run Function',
+        type: "Run Function",
         data: {
           fn: function () {
             return capturer.beforeCapture(config);
-          }
-        }
+          },
+        },
       });
     }
     for (let i = 1; i <= framesToCapture; i++) {
       addMarker({
         time: delayMs + frameNumToTime(i, framesToCapture),
-        type: 'Capture',
-        data: { frameCount: i }
+        type: "Capture",
+        data: { frameCount: i },
       });
       captureTimes.push(delayMs + frameNumToTime(i, framesToCapture));
     }
@@ -217,7 +241,7 @@ module.exports = async function (config) {
     if (captureTimes.length && captureTimes[0] > addAnimationGapThreshold) {
       addMarker({
         time: addAnimationFrameTime,
-        type: 'Only Animate'
+        type: "Only Animate",
       });
     }
 
@@ -226,11 +250,13 @@ module.exports = async function (config) {
     captureTimes.forEach(function (time) {
       if (maximumAnimationFrameDuration) {
         let frameDuration = time - lastMarkerTime;
-        let framesForDuration = Math.ceil(frameDuration / maximumAnimationFrameDuration);
+        let framesForDuration = Math.ceil(
+          frameDuration / maximumAnimationFrameDuration
+        );
         for (let i = 1; i < framesForDuration; i++) {
           addMarker({
-            time: lastMarkerTime + (i * frameDuration / framesForDuration),
-            type: 'Only Animate',
+            time: lastMarkerTime + (i * frameDuration) / framesForDuration,
+            type: "Only Animate",
           });
         }
       }
@@ -246,38 +272,46 @@ module.exports = async function (config) {
 
     var startCaptureTime = new Date().getTime();
     var markerIndex = 0;
-    while (markerIndex < markers.length && ! requestStopCapture) {
+    while (markerIndex < markers.length && !requestStopCapture) {
       var marker = markers[markerIndex];
       markerIndex++;
-      if (marker.type === 'Capture') {
+      if (marker.type === "Capture") {
         await timeHandler.goToTimeAndAnimateForCapture(page, marker.time);
         var skipCurrentFrame;
         if (config.shouldSkipFrame) {
           skipCurrentFrame = await config.shouldSkipFrame({
             page: page,
             frameCount: marker.data.frameCount,
-            framesToCapture: framesToCapture
+            framesToCapture: framesToCapture,
           });
         }
         if (skipCurrentFrame) {
-          log('Skipping frame: ' + marker.data.frameCount);
+          log("Skipping frame: " + marker.data.frameCount);
         } else {
           if (config.preparePageForScreenshot) {
-            log('Preparing page for screenshot...');
-            await config.preparePageForScreenshot(page, marker.data.frameCount, framesToCapture);
-            log('Page prepared');
+            log("Preparing page for screenshot...");
+            await config.preparePageForScreenshot(
+              page,
+              marker.data.frameCount,
+              framesToCapture
+            );
+            log("Page prepared");
           }
           if (capturer.capture) {
-            await capturer.capture(config, marker.data.frameCount, framesToCapture);
+            await capturer.capture(
+              config,
+              marker.data.frameCount,
+              framesToCapture
+            );
           }
         }
-      } else if (marker.type === 'Only Animate') {
+      } else if (marker.type === "Only Animate") {
         await timeHandler.goToTimeAndAnimate(page, marker.time);
-      } else if (marker.type === 'Run Function') {
+      } else if (marker.type === "Run Function") {
         await marker.data.fn(marker);
       }
     }
-    log('Elapsed capture time: ' + (new Date().getTime() - startCaptureTime));
+    log("Elapsed capture time: " + (new Date().getTime() - startCaptureTime));
     if (capturer.afterCapture) {
       await capturer.afterCapture();
     }
