@@ -134,7 +134,9 @@ module.exports = async function (config) {
   }
   async function run() {
     var browser = await getBrowser(config, launchOptions);
-    var page = await browser.newPage();
+    var page = config.electronBrowserWindow
+      ? await pie.getPage(browser, config.electronBrowserWindow)
+      : await browser.newPage();
     config = Object.assign(
       {
         log,
