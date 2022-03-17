@@ -317,7 +317,9 @@ module.exports = async function (config) {
     if (capturer.afterCapture) {
       await capturer.afterCapture();
     }
-    await browser.close();
+    if (config.remoteUrl == null && config.electronBrowserWindow == null) {
+      await browser.close();
+    }
   }
   try {
     await run();
