@@ -120,8 +120,6 @@ module.exports = async function (config) {
         .join("&");
       let remote = config.remoteUrl + "?" + queryString;
       return puppeteer.connect({ browserWSEndpoint: remote });
-    } else if (config.electronApp) {
-      return await pie.connect(config.electronApp, puppeteer);
     } else {
       return puppeteer.launch(launchOptions);
     }
@@ -133,10 +131,13 @@ module.exports = async function (config) {
     markers.push({ time, type, data, id: markerId++ });
   }
   async function run() {
-    var browser = await getBrowser(config, launchOptions);
-    var page = config.electronBrowserWindow
-      ? await pie.getPage(browser, config.electronBrowserWindow)
-      : await browser.newPage();
+    var browser, page;
+    if (config.puppeteerPage) {
+      page = config.puppeteerPage;
+    } else {
+      browser = await getBrowser(config, launchOptions);
+      page = await browser.newPage();
+    }
     config = Object.assign(
       {
         log,
@@ -317,7 +318,11 @@ module.exports = async function (config) {
     if (capturer.afterCapture) {
       await capturer.afterCapture();
     }
-    if (config.remoteUrl == null && config.electronBrowserWindow == null) {
+    if (
+      config.remoteUrl == null &&
+      config.electronBrowserWindow == null &&
+      browser
+    ) {
       await browser.close();
     }
   }
