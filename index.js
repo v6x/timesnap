@@ -173,8 +173,8 @@ module.exports = async function (config) {
     if (config.viewport || scaleArg) {
       config.viewport = Object.assign(
         {
-          width: getPageViewportSize(page).width,
-          height: getPageViewportSize(page).height,
+          width: getPageViewportSize(page)?.width,
+          height: getPageViewportSize(page)?.height,
           deviceScaleFactor: scaleArg ? Number(scaleArg.split("=")[1]) || 1 : 1,
         },
         config.viewport
