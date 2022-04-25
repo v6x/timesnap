@@ -30,8 +30,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-const puppeteer = require("puppeteer");
-const pie = require("puppeteer-in-electron");
 const path = require("path");
 const defaultDuration = 5;
 const defaultFPS = 60;
@@ -114,14 +112,10 @@ module.exports = async function (config) {
       return Promise.resolve(config.browser);
     } else if (config.launcher) {
       return Promise.resolve(config.launcher(launchOptions));
-    } else if (config.remoteUrl) {
-      let queryString = Object.keys(launchOptions)
-        .map((key) => key + "=" + launchOptions[key])
-        .join("&");
-      let remote = config.remoteUrl + "?" + queryString;
-      return puppeteer.connect({ browserWSEndpoint: remote });
     } else {
-      return puppeteer.launch(launchOptions);
+      throw Error(
+        "Puppeteer browser, page or launcher must be specified in config!"
+      );
     }
   };
   // A marker is an action at a specific time
